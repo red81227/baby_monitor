@@ -1,0 +1,3 @@
+/home/hank/workplace/baby_monitor_v1/build/CMakeFiles/BabyMonitor.dir
+/home/hank/workplace/baby_monitor_v1/build/CMakeFiles/edit_cache.dir
+/home/hank/workplace/baby_monitor_v1/build/CMakeFiles/rebuild_cache.dir
