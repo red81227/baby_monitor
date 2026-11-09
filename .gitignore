@@ -6,3 +6,4 @@ build/
 onnxruntime/
 onnxruntime-*.tgz
 runs/
+models/*.onnx

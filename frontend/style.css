@@ -1,0 +1,63 @@
+:root {
+  --bg: #f6f4ef;
+  --card: #fffdf8;
+  --ink: #1f2a20;
+  --ok: #117733;
+  --alert: #bb1e10;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Noto Sans TC", "PingFang TC", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 20% 20%, #fff2cc 0%, transparent 50%),
+    radial-gradient(circle at 80% 0%, #d7f0ff 0%, transparent 40%),
+    var(--bg);
+  min-height: 100vh;
+}
+
+.layout {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 1rem;
+}
+
+.card {
+  width: min(960px, 100%);
+  background: var(--card);
+  border: 1px solid #dfd8c8;
+  border-radius: 14px;
+  padding: 1rem;
+  box-shadow: 0 10px 40px rgba(48, 42, 28, 0.1);
+}
+
+h1 {
+  margin: 0 0 0.5rem;
+}
+
+#status {
+  margin: 0 0 1rem;
+  font-weight: 700;
+}
+
+#preview {
+  display: block;
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #c9c2b4;
+  background: #f4f1e8;
+}
+
+.alert {
+  color: var(--alert);
+}
+
+.ok {
+  color: var(--ok);
+}
