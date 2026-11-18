@@ -4,32 +4,39 @@
 
 #include <crow.h>
 
+#include <string>
+
 class ApiController {
 public:
     static void registerRoutes(crow::SimpleApp& app, MonitorState& state) {
         CROW_ROUTE(app, "/api/status")([&state]() {
-            const auto status = state.getStatus();
+            const auto snap = state.snapshot();
             crow::json::wvalue payload;
-            payload["motionDetected"] = status.motionDetected;
-            payload["personDetected"] = status.personDetected;
-            payload["lastMotionEpochMs"] = static_cast<int64_t>(status.lastMotionEpochMs);
-            payload["latestFrameBytes"] = static_cast<uint64_t>(status.latestFrameBytes);
+            payload["motionDetected"] = snap->motionDetected;
+            payload["personDetected"] = snap->personDetected;
+            payload["lastMotionEpochMs"] = static_cast<int64_t>(snap->lastMotionEpochMs);
+            payload["latestFrameBytes"] = static_cast<uint64_t>(snap->frame ? snap->frame->jpeg.size() : 0);
+            payload["cameraConnected"] = snap->cameraConnected;
+            payload["seq"] = static_cast<uint64_t>(snap->seq);
+            payload["detectHz"] = snap->detectHz;
             crow::response res{payload};
             res.set_header("Cache-Control", "no-store");
             return res;
         });
 
         CROW_ROUTE(app, "/api/frame.jpg")([&state]() {
-            auto frame = state.getFrameJpegCopy();
-            if (frame.empty()) {
+            const auto snap = state.snapshot();
+            if (!snap->frame || snap->frame->jpeg.empty()) {
                 return crow::response(503, "Frame not ready");
             }
 
+            const auto& jpeg = snap->frame->jpeg;
             crow::response res;
             res.code = 200;
             res.set_header("Content-Type", "image/jpeg");
             res.set_header("Cache-Control", "no-store");
-            res.body.assign(reinterpret_cast<const char*>(frame.data()), frame.size());
+            res.set_header("X-Frame-Seq", std::to_string(snap->frame->seq));
+            res.body.assign(reinterpret_cast<const char*>(jpeg.data()), jpeg.size());
             return res;
         });
     }

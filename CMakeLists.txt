@@ -62,7 +62,14 @@ add_library(bm_core STATIC
     src/vision/YoloDecoder.cpp
     src/vision/MotionTracker.cpp
     src/vision/YoloDetector.cpp
-    src/vision/VisionPipeline.cpp)
+    src/vision/Jpeg.cpp
+    src/vision/FrameSource.cpp
+    src/vision/CaptureThread.cpp
+    src/vision/ActivityScorer.cpp
+    src/vision/DetectScheduler.cpp
+    src/vision/AnalysisThread.cpp
+    src/vision/LiveProtocol.cpp
+    src/common/SystemdNotifier.cpp)
 target_include_directories(bm_core PUBLIC "${CMAKE_SOURCE_DIR}/src")
 target_include_directories(bm_core SYSTEM PUBLIC ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(bm_core PUBLIC ${OpenCV_LIBS} onnxruntime Threads::Threads)
@@ -74,17 +81,20 @@ target_compile_options(BabyMonitor PRIVATE ${BM_WARNINGS})
 set_target_properties(BabyMonitor PROPERTIES BUILD_RPATH "${ORT_ROOT}/lib")
 
 # 前端檔案放到執行檔旁邊 (StaticController 以執行檔目錄為根)
-add_custom_command(TARGET BabyMonitor POST_BUILD
+# 用獨立 target 而非 POST_BUILD：只改前端、執行檔沒重新連結時也要同步
+add_custom_target(frontend ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_SOURCE_DIR}/frontend"
-            "$<TARGET_FILE_DIR:BabyMonitor>/frontend")
+            "$<TARGET_FILE_DIR:BabyMonitor>/frontend"
+    COMMENT "Syncing frontend/")
+add_dependencies(frontend BabyMonitor)
 
 # ---------------------------------------------------------------
 # 測試
 # ---------------------------------------------------------------
 enable_testing()
 
-foreach(name config monitor_state yolo_decoder motion_tracker yolo_inference)
+foreach(name config monitor_state yolo_decoder motion_tracker yolo_inference latest_slot jpeg capture_thread activity_scorer detect_scheduler live_protocol systemd_notifier)
     add_executable(test_${name} tests/test_${name}.cpp)
     target_link_libraries(test_${name} PRIVATE bm_core)
     target_compile_options(test_${name} PRIVATE ${BM_WARNINGS})
@@ -92,7 +102,10 @@ foreach(name config monitor_state yolo_decoder motion_tracker yolo_inference)
     add_test(NAME ${name} COMMAND test_${name})
 endforeach()
 
+# live_protocol 用 Crow 的 JSON parser 驗證輸出是合法 JSON
+target_link_libraries(test_live_protocol PRIVATE crow_headers)
+
 # 沒有模型時回傳 77 => CTest 標記為 skipped
 set_tests_properties(yolo_inference PROPERTIES
     SKIP_RETURN_CODE 77
-    ENVIRONMENT "BM_MODEL_PATH=${CMAKE_SOURCE_DIR}/models/yolo26n.onnx;BM_TEST_IMAGE=${CMAKE_SOURCE_DIR}/tests/data/bus.jpg")
+    ENVIRONMENT "BM_MODEL_PATH=${CMAKE_SOURCE_DIR}/models/yolo26n-pose.onnx;BM_DETECT_MODEL_PATH=${CMAKE_SOURCE_DIR}/models/yolo26n.onnx;BM_TEST_IMAGE=${CMAKE_SOURCE_DIR}/tests/data/bus.jpg")

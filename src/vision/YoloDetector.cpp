@@ -48,16 +48,32 @@ YoloDetector::YoloDetector(const std::string& modelPath, float personConf)
     inputName_ = session_.GetInputNameAllocated(0, allocator).get();
     outputName_ = session_.GetOutputNameAllocated(0, allocator).get();
 
-    // 確認是 YOLO26 的 [1, N, 6] 輸出格式
+    // 依輸出欄數辨識模型類型：[1, N, 6] 純偵測、[1, N, 57] pose (皆為內含 NMS 的 end2end 匯出)
     auto outShape = session_.GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
-    if (outShape.size() != 3 || outShape[2] != 6) {
-        throw std::runtime_error("模型 " + modelPath + " 的輸出格式不是 YOLO26 的 [1, N, 6]");
+    if (outShape.size() == 3 && outShape[2] == kDetectStride) {
+        stride_ = kDetectStride;
+        modelType_ = "detect";
+    } else if (outShape.size() == 3 && outShape[2] == kPoseStride) {
+        stride_ = kPoseStride;
+        modelType_ = "pose";
+    } else {
+        std::string shape = "[";
+        for (size_t i = 0; i < outShape.size(); ++i) shape += (i ? ", " : "") + std::to_string(outShape[i]);
+        shape += "]";
+        throw std::runtime_error("模型 " + modelPath + " 的輸出形狀為 " + shape +
+                                 "，不是 YOLO26 內含 NMS 的 [1, N, 6] 或 [1, N, 57]" +
+                                 " (匯出時需加上 end2end=True，見 README)");
     }
 
-    std::cout << "[INFO] YOLO 模型已載入: " << modelPath << " (執行裝置: " << provider_ << ")\n";
+    std::cout << "[INFO] YOLO 模型已載入: " << modelPath << " (執行裝置: " << provider_
+              << ", 類型: " << modelType_ << ")\n";
 }
 
-std::optional<Detection> YoloDetector::detectPerson(const cv::Mat& bgr) {
+std::optional<Detection> YoloDetector::detectPerson(const cv::Mat& bgr, int reduceFactor, cv::Size fullSize) {
+    if (bgr.empty()) return std::nullopt;
+    if (reduceFactor < 1) reduceFactor = 1;
+    if (fullSize.empty()) fullSize = cv::Size(bgr.cols * reduceFactor, bgr.rows * reduceFactor);
+
     // Letterbox：等比例縮放，靠左上放置，其餘補灰 (pad = 0)
     const float scale = std::min(static_cast<float>(kInputSize) / bgr.cols,
                                  static_cast<float>(kInputSize) / bgr.rows);
@@ -79,6 +95,8 @@ std::optional<Detection> YoloDetector::detectPerson(const cv::Mat& bgr) {
     auto outputs = session_.Run(Ort::RunOptions{nullptr}, &inName, &input, 1, &outName, 1);
 
     const auto shape = outputs[0].GetTensorTypeAndShapeInfo().GetShape();
+    // 主碼流座標 = letterbox 座標 / (scale / reduceFactor)
     return decodeBestDetection(outputs[0].GetTensorData<float>(), static_cast<int>(shape[1]),
-                               scale, 0.0f, 0.0f, bgr.cols, bgr.rows, personConf_, kPersonClass);
+                               scale / static_cast<float>(reduceFactor), 0.0f, 0.0f,
+                               fullSize.width, fullSize.height, personConf_, kPersonClass, stride_);
 }

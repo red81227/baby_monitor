@@ -92,5 +92,66 @@ int main() {
         CHECK(!decode(o, 1.0f, 0, 0, 640, 480).has_value());
     }
 
+    // ---- pose 模型 (57 欄) ----
+    {
+        // 第 0 列分數較低，第 1 列為最佳：關鍵點必須來自最佳那一列
+        std::vector<float> data(kRows * kPoseStride, 0.0f);
+        auto setRow = [&](int row, float x1, float y1, float x2, float y2, float score, float kpBase) {
+            float* r = &data[row * kPoseStride];
+            r[0] = x1; r[1] = y1; r[2] = x2; r[3] = y2; r[4] = score; r[5] = 0;
+            for (int j = 0; j < kKeypointCount; ++j) {
+                r[6 + j * 3 + 0] = kpBase + j * 10.0f;            // x
+                r[6 + j * 3 + 1] = kpBase + j * 5.0f;             // y
+                r[6 + j * 3 + 2] = static_cast<float>(j) / 16.0f; // 可見度 0..1
+            }
+        };
+        setRow(0, 10, 10, 50, 50, 0.50f, 0.0f);
+        setRow(1, 100, 100, 300, 400, 0.90f, 120.0f);
+        // 超出影格的關鍵點：16 號在右下方外面、0 號在左上方外面
+        data[1 * kPoseStride + 6 + 16 * 3 + 0] = 900.0f;
+        data[1 * kPoseStride + 6 + 16 * 3 + 1] = 700.0f;
+        data[1 * kPoseStride + 6 + 0 * 3 + 0] = -5.0f;
+        data[1 * kPoseStride + 6 + 0 * 3 + 1] = -8.0f;
+
+        // 子碼流 640x360 縮小 2 倍 (scale 1.0 / reduceFactor 2 = 0.5)，主碼流 1280x720
+        auto d = decodeBestDetection(data.data(), kRows, 0.5f, 0, 0, 1280, 720, 0.45f, 0, kPoseStride);
+        CHECK(d.has_value());
+        CHECK_NEAR(d->confidence, 0.90f, 1e-6f);
+        CHECK_NEAR(d->box.x, 200.0f, 1e-3f);
+        CHECK_NEAR(d->box.width, 400.0f, 1e-3f);
+        CHECK(d->keypoints.has_value());
+        const auto& k = *d->keypoints;
+        // 換算與框相同：(v - pad) / scale
+        CHECK_NEAR(k[1].x, (120.0f + 10.0f) / 0.5f, 1e-3f);
+        CHECK_NEAR(k[1].y, (120.0f + 5.0f) / 0.5f, 1e-3f);
+        CHECK_NEAR(k[8].x, (120.0f + 80.0f) / 0.5f, 1e-3f);
+        CHECK_NEAR(k[8].y, (120.0f + 40.0f) / 0.5f, 1e-3f);
+        // clamp 到主碼流範圍
+        CHECK_NEAR(k[0].x, 0.0f, 1e-6f);
+        CHECK_NEAR(k[0].y, 0.0f, 1e-6f);
+        CHECK_NEAR(k[16].x, 1280.0f, 1e-3f);
+        CHECK_NEAR(k[16].y, 720.0f, 1e-3f);
+        // 可見度原樣保留
+        for (int j = 0; j < kKeypointCount; ++j) CHECK_NEAR(k[j].visibility, j / 16.0f, 1e-6f);
+
+        // 含 pad 時同樣扣掉 pad
+        auto p = decodeBestDetection(data.data(), kRows, 1.0f, 0, 20, 1280, 720, 0.45f, 0, kPoseStride);
+        CHECK(p.has_value() && p->keypoints.has_value());
+        CHECK_NEAR((*p->keypoints)[1].y, 125.0f - 20.0f, 1e-3f);
+
+        // 沒有人物時不回報關鍵點
+        std::vector<float> empty(kRows * kPoseStride, 0.0f);
+        CHECK(!decodeBestDetection(empty.data(), kRows, 1.0f, 0, 0, 640, 640, 0.45f, 0, kPoseStride));
+    }
+
+    // 6 欄 (純偵測模型) 時沒有關鍵點
+    {
+        Output o;
+        o.set(0, 10, 10, 200, 200, 0.9f, 0);
+        auto d = decode(o);
+        CHECK(d.has_value());
+        CHECK(!d->keypoints.has_value());
+    }
+
     return 0;
 }

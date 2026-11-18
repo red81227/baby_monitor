@@ -46,12 +46,47 @@ h1 {
   font-weight: 700;
 }
 
-#preview {
+.viewer {
+  position: relative;
+}
+
+#view {
   display: block;
   width: 100%;
+  height: auto;
   border-radius: 10px;
   border: 1px solid #c9c2b4;
-  background: #f4f1e8;
+  background: #2b2a27;
+  aspect-ratio: 16 / 9;
+}
+
+#view.stale {
+  opacity: 0.45;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 1rem;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+.overlay[hidden] {
+  display: none;
+}
+
+.meta {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: #6b6658;
+  font-variant-numeric: tabular-nums;
 }
 
 .alert {

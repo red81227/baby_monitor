@@ -11,7 +11,11 @@
     <section class="card">
       <h1>BabyMonitor</h1>
       <p id="status">Connecting...</p>
-      <img id="preview" alt="Live preview" />
+      <div class="viewer">
+        <canvas id="view" width="1280" height="720" aria-label="Live view"></canvas>
+        <p id="overlay" class="overlay" hidden></p>
+      </div>
+      <p id="meta" class="meta"></p>
     </section>
   </main>
   <script src="/app.js"></script>

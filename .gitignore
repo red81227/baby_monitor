@@ -7,3 +7,4 @@ onnxruntime/
 onnxruntime-*.tgz
 runs/
 models/*.onnx
+frame.jpg

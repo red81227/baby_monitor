@@ -1,33 +1,44 @@
 #include "models/MonitorState.h"
 
+MonitorState::MonitorState() : current_(std::make_shared<const Snapshot>()) {}
+
+template <class F>
+void MonitorState::modify(F&& f) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto next = std::make_shared<Snapshot>(*current_);  // 複製的是欄位與 frame 指標，不是影像
+    f(*next);
+    current_ = std::move(next);
+}
+
+void MonitorState::updateFrame(std::shared_ptr<const RawFrame> frame) {
+    modify([&](Snapshot& s) {
+        s.seq = frame ? frame->seq : s.seq;
+        s.frame = std::move(frame);
+        s.cameraConnected = true;
+    });
+}
+
+void MonitorState::setCameraConnected(bool connected) {
+    modify([&](Snapshot& s) { s.cameraConnected = connected; });
+}
+
 void MonitorState::updateDetection(bool personDetected, bool motionDetected) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    personDetected_ = personDetected;
-    motionDetected_ = motionDetected;
-    if (motionDetected) {
-        lastMotionAt_ = std::chrono::system_clock::now();
-    }
+    modify([&](Snapshot& s) {
+        s.personDetected = personDetected;
+        s.motionDetected = motionDetected;
+        if (motionDetected) {
+            s.lastMotionEpochMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                      std::chrono::system_clock::now().time_since_epoch())
+                                      .count();
+        }
+    });
 }
 
-void MonitorState::updateFrameJpeg(std::vector<unsigned char>&& jpeg) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    latestFrameJpeg_ = std::move(jpeg);
+void MonitorState::setDetectHz(double hz) {
+    modify([&](Snapshot& s) { s.detectHz = hz; });
 }
 
-MonitorState::Status MonitorState::getStatus() const {
+std::shared_ptr<const MonitorState::Snapshot> MonitorState::snapshot() const {
     std::lock_guard<std::mutex> lock(mutex_);
-
-    long long lastMotionEpochMs = 0;
-    if (lastMotionAt_.time_since_epoch().count() != 0) {
-        lastMotionEpochMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-            lastMotionAt_.time_since_epoch())
-            .count();
-    }
-
-    return Status{motionDetected_, personDetected_, lastMotionEpochMs, latestFrameJpeg_.size()};
-}
-
-std::vector<unsigned char> MonitorState::getFrameJpegCopy() const {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return latestFrameJpeg_;
+    return current_;
 }

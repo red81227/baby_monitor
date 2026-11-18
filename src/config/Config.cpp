@@ -65,5 +65,42 @@ std::optional<Config> loadConfig(std::string& error) {
         cfg.personConf = conf;
     }
 
+    if (const char* v = std::getenv("BM_CAMERA_DEVICE")) {
+        if (*v == '\0') {
+            error = "錯誤: BM_CAMERA_DEVICE 不可為空字串";
+            return std::nullopt;
+        }
+        cfg.cameraDevice = v;
+    }
+
+    for (auto [name, field] : {std::pair{"BM_CAPTURE_WIDTH", &cfg.captureWidth},
+                               std::pair{"BM_CAPTURE_HEIGHT", &cfg.captureHeight}}) {
+        if (const char* v = std::getenv(name)) {
+            long n = 0;
+            if (!parseInt(v, n) || n < 1 || n > 8192) {
+                error = invalid(name, v, " 1-8192 的整數 (像素)");
+                return std::nullopt;
+            }
+            *field = static_cast<int>(n);
+        }
+    }
+
+    for (auto [name, field] : {std::pair{"BM_DETECT_MIN_HZ", &cfg.detectMinHz},
+                               std::pair{"BM_DETECT_MAX_HZ", &cfg.detectMaxHz}}) {
+        if (const char* v = std::getenv(name)) {
+            float hz = 0;
+            if (!parseFloat(v, hz) || hz <= 0 || hz > 1000) {
+                error = invalid(name, v, "大於 0、不超過 1000 的數字 (每秒次數)");
+                return std::nullopt;
+            }
+            *field = hz;
+        }
+    }
+    if (cfg.detectMinHz > cfg.detectMaxHz) {
+        error = "錯誤: BM_DETECT_MIN_HZ (" + std::to_string(cfg.detectMinHz) +
+                ") 不可大於 BM_DETECT_MAX_HZ (" + std::to_string(cfg.detectMaxHz) + ")";
+        return std::nullopt;
+    }
+
     return cfg;
 }
