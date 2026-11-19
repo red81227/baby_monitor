@@ -59,6 +59,35 @@ int main() {
         CHECK_NEAR(d->box.height, 300.0f, 1e-4f);
         CHECK_NEAR(d->center().x, 200.0f, 1e-4f);
         CHECK_NEAR(d->center().y, 250.0f, 1e-4f);
+
+        int count = -1;
+        decodeBestDetection(o.data.data(), kRows, 1, 0, 0, 640, 640, 0.45f, 0, kDetectStride, &count);
+        CHECK(count == 3);
+    }
+
+    // 人物數量：只計 person 類別、達到門檻、框不完全落在影格外的筆數
+    {
+        Output o;
+        o.set(0, 10, 10, 100, 100, 0.90f, 0);    // 計入
+        o.set(1, 200, 200, 300, 300, 0.50f, 0);  // 計入
+        o.set(2, 300, 300, 400, 400, 0.30f, 0);  // 低於門檻
+        o.set(3, 100, 100, 200, 200, 0.99f, 5);  // 非 person
+        o.set(4, 700, 700, 800, 800, 0.80f, 0);  // 完全在 640x640 影格外
+        int count = -1;
+        auto d = decodeBestDetection(o.data.data(), kRows, 1, 0, 0, 640, 640, 0.45f, 0, kDetectStride, &count);
+        CHECK(d.has_value());
+        CHECK_NEAR(d->confidence, 0.90f, 1e-6f);
+        CHECK(count == 2);
+
+        // 門檻調低後多計入一筆
+        decodeBestDetection(o.data.data(), kRows, 1, 0, 0, 640, 640, 0.25f, 0, kDetectStride, &count);
+        CHECK(count == 3);
+
+        // 沒有人物時為 0
+        Output empty;
+        count = -1;
+        CHECK(!decodeBestDetection(empty.data.data(), kRows, 1, 0, 0, 640, 640, 0.45f, 0, kDetectStride, &count));
+        CHECK(count == 0);
     }
 
     // scale 與 pad 轉換回原始座標：1280x960 縮到 640x480 (scale 0.5)，上方 pad 80

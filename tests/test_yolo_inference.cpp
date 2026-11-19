@@ -62,8 +62,12 @@ void checkModel(const std::string& modelPath, const cv::Mat& image, bool expectP
     CHECK(detector.modelType() == (expectPose ? "pose" : "detect"));
 
     // 直式 810x1080
-    auto person = detector.detectPerson(image);
+    int personCount = 0;
+    auto person = detector.detectPerson(image, 1, {}, &personCount);
     CHECK(person.has_value());
+    // bus.jpg 中有多個人
+    std::cout << "personCount=" << personCount << "\n";
+    CHECK(personCount > 1);
     std::cout << "person conf=" << person->confidence << " box=" << person->box << "\n";
     CHECK(person->confidence >= 0.45f);
     CHECK(person->box.x >= 0 && person->box.y >= 0);

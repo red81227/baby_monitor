@@ -11,8 +11,8 @@ std::chrono::milliseconds reconnectBackoff(unsigned attempt) {
 }
 
 CaptureThread::CaptureThread(FrameSource& source, LatestSlot<RawFrame>& frames, MonitorState& state,
-                             Heartbeat& heartbeat)
-    : source_(source), frames_(frames), state_(state), heartbeat_(heartbeat) {}
+                             Heartbeat& heartbeat, FrameSink sink)
+    : source_(source), frames_(frames), state_(state), heartbeat_(heartbeat), sink_(std::move(sink)) {}
 
 CaptureThread::~CaptureThread() {
     stop();
@@ -74,6 +74,7 @@ void CaptureThread::run() {
         frame->seq = seq_.next();
         auto shared = std::make_shared<const RawFrame>(std::move(*frame));
         state_.updateFrame(shared);
+        if (sink_) sink_(shared);
         frames_.publish(std::move(shared));
         heartbeat_.beat();
     }

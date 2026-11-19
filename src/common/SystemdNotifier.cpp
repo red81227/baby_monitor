@@ -90,8 +90,5 @@ void SystemdNotifier::watchdogLoop() {
 
 bool allHeartbeatsFresh(const std::vector<const Heartbeat*>& heartbeats, std::chrono::microseconds period,
                         Heartbeat::Clock::time_point now) {
-    for (const Heartbeat* hb : heartbeats) {
-        if (hb->age(now) >= period) return false;
-    }
-    return true;
+    return !firstStaleHeartbeat(heartbeats, period, now).has_value();
 }

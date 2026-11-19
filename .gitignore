@@ -8,3 +8,9 @@ onnxruntime-*.tgz
 runs/
 models/*.onnx
 frame.jpg
+/logs/
+/events/
+
+# Docker Compose 部署
+.env
+/data/

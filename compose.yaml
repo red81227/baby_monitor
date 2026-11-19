@@ -1,0 +1,131 @@
+# 嬰兒監視器部署：monitor (BabyMonitor) + vlm (llama-server)
+# 設計見 openspec/changes/containerize-services/design.md；設定值在 .env (由 .env.example 複製)
+#
+#   docker compose build && docker compose up -d
+#   docker compose ps / logs -f / down
+
+name: babymonitor
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-gpu: &gpu
+  resources:
+    reservations:
+      devices:
+        - driver: nvidia
+          count: all
+          capabilities: [gpu]
+
+services:
+  # 網路持有者：monitor 與 vlm 共用它的 network namespace (同一個 127.0.0.1)。
+  # vlm 只監聽 127.0.0.1，因此只有 monitor 連得到，主機 (含容器 IP) 與區網都連不到 (D4)。
+  # 獨立成一個不會重啟的容器，monitor 或 vlm 各自重啟時不影響另一個的網路。
+  net:
+    image: "${NET_IMAGE:-alpine:3.22.2}"
+    command: ["sleep", "infinity"]
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 2s
+    # 只發佈監視頁面
+    ports:
+      - "${BM_BIND:-0.0.0.0}:${BM_PORT:-18080}:18080"
+    logging: *logging
+    networks: [babymonitor]
+
+  monitor:
+    build:
+      context: .
+      dockerfile: docker/monitor.Dockerfile
+    image: babymonitor-monitor:local
+    network_mode: "service:net"
+    # VLM 只等「已啟動」，不等健康檢查：VLM 載入慢或無法啟動時監看照常進行 (D1)
+    depends_on:
+      net:
+        condition: service_started
+      vlm:
+        condition: service_started
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 10s
+    # 以主機使用者執行：寫出的紀錄與片段屬於主機使用者 (D5)
+    user: "${BM_UID:?請在 .env 設定 BM_UID (id -u)}:${BM_GID:?請在 .env 設定 BM_GID (id -g)}"
+    group_add:
+      - "${BM_VIDEO_GID:-44}"
+    devices:
+      - "${BM_CAMERA_DEVICE:-/dev/video0}:${BM_CAMERA_DEVICE:-/dev/video0}"
+    deploy: *gpu
+    environment:
+      TZ: "${TZ:?請在 .env 設定 TZ (例如 Asia/Taipei)}"
+      BM_CAMERA_DEVICE: "${BM_CAMERA_DEVICE:-/dev/video0}"
+      BM_VLM_URL: "http://127.0.0.1:8080"  # 共用 net 的 namespace
+      BM_VLM_MODEL: "${VLM_MODEL_NAME:-qwen2.5-vl-3b}"
+      BM_STALL_EXIT_SECONDS: "60"
+      BM_EVENT_MAX_MB: "${BM_EVENT_MAX_MB:-2048}"
+      BM_LOG_DIR: /var/lib/babymonitor/logs
+      BM_EVENT_DIR: /var/lib/babymonitor/events
+      BM_OVERRIDES_DIR: /var/lib/babymonitor/overrides  # 網頁設定的 ROI
+    volumes:
+      - ./config:/opt/babymonitor/config:ro      # 規則檔與 prompt，主機修改後 5 秒內熱重載
+      - ./models:/opt/babymonitor/models:ro      # YOLO 模型
+      - "${BM_DATA_DIR:-./data}/logs:/var/lib/babymonitor/logs"
+      - "${BM_DATA_DIR:-./data}/events:/var/lib/babymonitor/events"
+      - "${BM_DATA_DIR:-./data}/overrides:/var/lib/babymonitor/overrides"  # 可寫入：網頁設定的 ROI
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:18080/api/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: *logging
+
+  vlm:
+    image: "${VLM_IMAGE:-ghcr.io/ggml-org/llama.cpp:server-cuda-b12464}"
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 10s
+    network_mode: "service:net"
+    depends_on:
+      net:
+        condition: service_started
+    deploy: *gpu
+    # 映像的 entrypoint 是 llama-server；只監聽共用 namespace 的 127.0.0.1，只有 monitor 連得到
+    command:
+      - -m
+      - "/models/${VLM_MODEL_FILE:-Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf}"
+      - --mmproj
+      - "/models/${VLM_MMPROJ_FILE:-mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf}"
+      - -a
+      - "${VLM_MODEL_NAME:-qwen2.5-vl-3b}"
+      - --host
+      - 127.0.0.1
+      - --port
+      - "8080"
+      - -c
+      - "${VLM_CTX:-4096}"
+      - -np
+      - "1"
+      - -ngl
+      - all
+      - -fa
+      - "on"
+    environment:
+      TZ: "${TZ:?請在 .env 設定 TZ (例如 Asia/Taipei)}"
+    volumes:
+      - "${VLM_MODEL_DIR:?請在 .env 設定 VLM_MODEL_DIR (VLM 模型檔所在目錄)}:/models:ro"
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+    logging: *logging
+
+networks:
+  babymonitor:
+    name: babymonitor

@@ -21,14 +21,16 @@ int decodeFlag(int factor) {
 
 AnalysisThread::AnalysisThread(LatestSlot<RawFrame>& frames, YoloDetector& detector, MonitorState& state,
                                Heartbeat& heartbeat, float motionPx, double minHz, double maxHz,
-                               ResultCallback onResult)
+                               ResultCallback onResult, AnalysisCallback onAnalysis, RoiProvider activityRoi)
     : frames_(frames),
       detector_(detector),
       state_(state),
       heartbeat_(heartbeat),
       tracker_(motionPx),
       scheduler_(minHz, maxHz, ActivityScorer::kActiveThreshold),
-      onResult_(std::move(onResult)) {}
+      onResult_(std::move(onResult)),
+      onAnalysis_(std::move(onAnalysis)),
+      activityRoi_(std::move(activityRoi)) {}
 
 AnalysisThread::~AnalysisThread() {
     stop();
@@ -71,15 +73,18 @@ void AnalysisThread::run() {
                                                   : cv::Size(sub.cols * factor, sub.rows * factor);
 
         auto now = Clock::now();
-        scheduler_.onScore(scorer_.score(sub), now);
+        const double activity = scorer_.score(sub, activityRoi_ ? activityRoi_() : std::nullopt);
+        scheduler_.onScore(activity, now);
 
+        DetectionResult result;
+        bool detected = false;
         if (scheduler_.shouldDetect(now)) {
-            DetectionResult result;
+            detected = true;
             result.seq = frame.seq;
             result.tCapture = frame.tCapture;
             result.width = fullSize.width;
             result.height = fullSize.height;
-            result.person = detector_.detectPerson(sub, factor, fullSize);
+            result.person = detector_.detectPerson(sub, factor, fullSize, &result.personCount);
             result.motion = tracker_.update(result.person ? std::optional(result.person->center()) : std::nullopt);
 
             now = Clock::now();
@@ -87,6 +92,7 @@ void AnalysisThread::run() {
             state_.updateDetection(result.person.has_value(), result.motion);
             if (onResult_) onResult_(result);
         }
+        if (onAnalysis_) onAnalysis_(frame.seq, toMicros(frame.tCapture), activity, detected ? &result : nullptr);
         state_.setDetectHz(scheduler_.actualHz(now));
     }
 }

@@ -1,0 +1,24 @@
+# 建置 context 只需要原始碼、CMakeLists、前端與規則檔
+# (主機的建置結果、ONNX Runtime、模型與資料都不送進去，確保乾淨可重現的建置)
+.git/
+.venv/
+build/
+onnxruntime/
+onnxruntime-*.tgz
+models/
+*.onnx
+*.pt
+*.engine
+runs/
+logs/
+events/
+data/
+openspec/
+scripts/
+.env
+.env.*
+compose.yaml
+compose.*.yaml
+frame.jpg
+.vscode/
+.claude/

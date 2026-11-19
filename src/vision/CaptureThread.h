@@ -9,6 +9,8 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <functional>
+#include <memory>
 #include <mutex>
 #include <thread>
 
@@ -29,8 +31,12 @@ private:
 // 攝影機中斷時回報 cameraConnected=false 並以退避間隔重開同一個裝置；stop() 可中斷等待。
 class CaptureThread {
 public:
+    using FrameSink = std::function<void(const std::shared_ptr<const RawFrame>&)>;
+
     // source 必須已經 open() 成功 (啟動時開不了攝影機由 main 處理)
-    CaptureThread(FrameSource& source, LatestSlot<RawFrame>& frames, MonitorState& state, Heartbeat& heartbeat);
+    // sink：每張影格額外送一份 (例如環形緩衝)；可為空
+    CaptureThread(FrameSource& source, LatestSlot<RawFrame>& frames, MonitorState& state, Heartbeat& heartbeat,
+                  FrameSink sink = nullptr);
     ~CaptureThread();
 
     void start();
@@ -44,6 +50,7 @@ private:
     LatestSlot<RawFrame>& frames_;
     MonitorState& state_;
     Heartbeat& heartbeat_;
+    FrameSink sink_;
     SeqCounter seq_;
 
     std::mutex mutex_;

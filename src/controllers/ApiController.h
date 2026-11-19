@@ -4,12 +4,16 @@
 
 #include <crow.h>
 
+#include <functional>
 #include <string>
 
 class ApiController {
 public:
-    static void registerRoutes(crow::SimpleApp& app, MonitorState& state) {
-        CROW_ROUTE(app, "/api/status")([&state]() {
+    // extras：在 /api/status 加上其他模組的欄位 (既有欄位不變)
+    using StatusExtras = std::function<void(crow::json::wvalue&)>;
+
+    static void registerRoutes(crow::SimpleApp& app, MonitorState& state, StatusExtras extras = nullptr) {
+        CROW_ROUTE(app, "/api/status")([&state, extras]() {
             const auto snap = state.snapshot();
             crow::json::wvalue payload;
             payload["motionDetected"] = snap->motionDetected;
@@ -19,6 +23,7 @@ public:
             payload["cameraConnected"] = snap->cameraConnected;
             payload["seq"] = static_cast<uint64_t>(snap->seq);
             payload["detectHz"] = snap->detectHz;
+            if (extras) extras(payload);
             crow::response res{payload};
             res.set_header("Cache-Control", "no-store");
             return res;

@@ -8,16 +8,89 @@
 </head>
 <body>
   <main class="layout">
-    <section class="card">
-      <h1>BabyMonitor</h1>
-      <p id="status">Connecting...</p>
-      <div class="viewer">
-        <canvas id="view" width="1280" height="720" aria-label="Live view"></canvas>
+    <section class="card live-card">
+      <header class="live-head">
+        <h1>BabyMonitor</h1>
+        <p id="status">連線中…</p>
+      </header>
+      <div id="viewer" class="viewer">
+        <canvas id="view" width="1280" height="720" aria-label="即時影像"></canvas>
         <p id="overlay" class="overlay" hidden></p>
+        <div id="roi-toolbar" class="roi-toolbar" hidden>
+          <span id="roi-hint" class="roi-hint"></span>
+          <button id="roi-save" class="btn primary" type="button">儲存</button>
+          <button id="roi-cancel" class="btn" type="button">取消</button>
+        </div>
+        <div id="alert-banner" class="alert-banner" role="alert" hidden></div>
+        <button id="exit-focus" class="btn exit-focus" type="button" hidden>離開只看影像</button>
       </div>
       <p id="meta" class="meta"></p>
+      <div class="controls">
+        <fieldset class="toggles">
+          <legend>疊圖</legend>
+          <label><input type="checkbox" data-overlay="box" checked /> 人物框</label>
+          <label><input type="checkbox" data-overlay="skeleton" checked /> 骨架</label>
+          <label><input type="checkbox" data-overlay="roi" checked /> ROI</label>
+        </fieldset>
+        <div class="actions">
+          <button id="roi-edit" class="btn" type="button" disabled>編輯 ROI</button>
+          <button id="roi-reset" class="btn" type="button" hidden>還原為規則檔</button>
+          <button id="focus-toggle" class="btn" type="button">只看影像</button>
+          <button id="sound-toggle" class="btn" type="button">啟用提示音</button>
+        </div>
+      </div>
+      <p id="roi-info" class="roi-info"></p>
+      <p id="roi-message" class="roi-message" role="status" hidden></p>
+    </section>
+
+    <section class="card">
+      <h2>狀況</h2>
+      <p id="rules-info" class="meta"></p>
+      <p id="rules-error" class="rules-error" hidden></p>
+      <ul id="rules-warnings" class="rules-warnings"></ul>
+      <p class="hint">規則只能以修改規則檔的方式變更，此頁面只顯示；唯一的例外是 ROI，可以在影像上設定。</p>
+      <table class="situations">
+        <thead>
+          <tr><th>狀況</th><th>嚴重程度</th><th>路由</th><th>條件</th><th>目前</th></tr>
+        </thead>
+        <tbody id="situations-body"></tbody>
+      </table>
+      <h3 class="subhead">巡檢</h3>
+      <p id="patrol-stalled" class="rules-error" hidden></p>
+      <table class="situations patrols">
+        <thead>
+          <tr><th>巡檢</th><th>嚴重程度</th><th>間隔</th><th>最後成功</th><th>最近結果</th></tr>
+        </thead>
+        <tbody id="patrols-body"></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>觸發紀錄</h2>
+        <label class="filter">嚴重程度
+          <select id="alert-filter">
+            <option value="all">全部</option>
+            <option value="critical">緊急</option>
+            <option value="warning">警告</option>
+            <option value="info">資訊</option>
+          </select>
+        </label>
+      </div>
+      <ul id="alert-list" class="alert-list"></ul>
     </section>
   </main>
-  <script src="/app.js"></script>
+
+  <dialog id="detail" class="detail">
+    <form method="dialog"><button class="close" aria-label="關閉">×</button></form>
+    <h3 id="detail-title"></h3>
+    <p id="detail-cause"></p>
+    <div class="clip">
+      <img id="clip-img" alt="事件片段" />
+      <p id="clip-info" class="meta"></p>
+    </div>
+    <dl id="detail-fields" class="fields"></dl>
+  </dialog>
+  <script type="module" src="/main.js"></script>
 </body>
 </html>

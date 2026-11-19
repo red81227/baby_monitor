@@ -1,0 +1,105 @@
+# BabyMonitor 狀況規則 (格式見 README「狀況規則」)
+#
+# 修改後存檔，服務會在 5 秒內自動重新載入；驗證失敗時繼續使用原本的規則，
+# 錯誤顯示在監視頁面與 /api/situations。每次修改請遞增 version。
+#
+# 以下門檻是尚未以真實嬰兒影像校正的初始值。
+#
+# grace (容許中斷)：逐格訊號會短暫閃爍 (例如臉部被短暫判定為看得到)。中斷連續短於 grace 時
+# for 不重新計時，已成立的狀況也不會因為閃爍再觸發一次。
+
+version: 2
+
+# 關鍵點可見度門檻 (face_visible / body_visible / prone_likely / keypoint_motion 使用)
+keypoint_visibility: 0.5
+
+# 嬰兒床區域 (以畫面比例表示的 x, y, w, h)。設定後 activity 只計算區域內，
+# near_bed_edge 才有值；沒有設定時 near_bed_side 狀況不會觸發。
+# bed_roi: [0.20, 0.15, 0.60, 0.75]
+bed_edge_margin: 0.1
+
+situations:
+  # 臉被被子或物品蓋住：身體還看得到，臉卻持續看不到。
+  # face_visible 只看鼻與雙眼的關鍵點，口鼻被蓋住但眼睛露出時偵測不到，由下方 airway_covered 巡檢負責。
+  # critical：一律直接提醒，LLM 只補充說明，不能撤回。
+  - id: face_covered
+    severity: critical
+    route: direct
+    when:
+      - { signal: body_visible, is: true }
+      - { signal: face_visible, is: false, for: 10s, grace: 1s }
+    cooldown: 60s
+    clip: [-20s, 5s]
+    prompt: prompts/face_covered.md
+
+  # 疑似趴睡：只看得到頭側，看不到臉。關鍵點判斷尚未驗證，先交給 LLM 確認。
+  - id: prone
+    severity: warning
+    route: llm
+    when:
+      - { signal: prone_likely, is: true, for: 10s }
+    cooldown: 5m
+    clip: [-20s, 5s]
+    prompt: prompts/prone.md
+    timeout: 20s
+    on_timeout: alert
+
+  # 醒來、持續活動：畫面持續有變化。由 LLM 判斷只是翻身還是真的醒了。
+  - id: awake_active
+    severity: warning
+    route: llm
+    when:
+      - { signal: activity, above: 0.03, for: 30s, grace: 2s }
+    cooldown: 5m
+    clip: [-20s, 5s]
+    prompt: prompts/awake_active.md
+    timeout: 20s
+    on_timeout: alert
+
+  # 不在床上 / 偵測不到：可能被抱走，也可能被被子完全蓋住。由 LLM 判斷。
+  - id: not_in_bed
+    severity: warning
+    route: llm
+    when:
+      - { signal: person_present, is: false, for: 60s }
+    cooldown: 10m
+    clip: [-30s, 5s]
+    prompt: prompts/not_in_bed.md
+    timeout: 20s
+    on_timeout: alert
+
+  # 靠近床邊 / 嘗試爬出：需要設定 bed_roi。
+  - id: near_bed_side
+    severity: warning
+    route: llm
+    when:
+      - { signal: near_bed_edge, is: true, for: 5s }
+    cooldown: 2m
+    clip: [-20s, 5s]
+    prompt: prompts/near_bed_side.md
+    timeout: 20s
+    on_timeout: alert
+
+  # 有大人在畫面中：家長已經在處理，壓制 critical 以外的提醒。
+  - id: adult_present
+    severity: info
+    route: suppress
+    when:
+      - { signal: person_count, above: 1, grace: 2s }
+    suppress: { below: critical, linger: 2m }
+    cooldown: 0s
+
+# 巡檢：每隔 every 把最近的影格交給 VLM 判斷，用於第一段訊號偵測不到的狀況。
+# 巡檢只會讓提醒發生；VLM 無法使用時會送出「巡檢停止」警報 (不可壓制)。
+patrols:
+  # 口鼻被蓋住：YOLO pose 沒有嘴巴關鍵點，被遮住的鼻子也會被推算為可見，只能由 VLM 判斷。
+  # 一律巡檢 (不設 while)：寶寶整個被被子蓋住時可能偵測不到人，正是最需要巡檢的時候。
+  - id: airway_covered
+    severity: critical
+    every: 30s
+    frames: 2
+    confirm: 2        # 連續 2 次回覆需要提醒才觸發；第一次回覆需要提醒後立即再巡檢一次
+    cooldown: 60s
+    clip: [-20s, 5s]
+    prompt: prompts/airway_covered.md
+    timeout: 15s

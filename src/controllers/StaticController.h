@@ -4,6 +4,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <regex>
 #include <sstream>
 #include <string>
 
@@ -15,12 +16,13 @@ public:
             return readAndRespond("index.html", "text/html; charset=utf-8");
         });
 
-        CROW_ROUTE(app, "/app.js")([]() {
-            return readAndRespond("app.js", "application/javascript; charset=utf-8");
-        });
-
-        CROW_ROUTE(app, "/style.css")([]() {
-            return readAndRespond("style.css", "text/css; charset=utf-8");
+        // 前端模組與樣式：只接受 frontend/ 第一層的 <名稱>.js / <名稱>.css (不會讀到其他目錄)
+        CROW_ROUTE(app, "/<string>")([](const std::string& name) {
+            static const std::regex allowed(R"(^[a-z0-9][a-z0-9-]*\.(js|css)$)");
+            std::smatch m;
+            if (!std::regex_match(name, m, allowed)) return crow::response(404, "Not Found");
+            // ES modules 必須以 JavaScript MIME type 提供
+            return readAndRespond(name, m[1] == "js" ? "text/javascript; charset=utf-8" : "text/css; charset=utf-8");
         });
     }
 
@@ -43,6 +45,8 @@ private:
         crow::response res;
         res.code = 200;
         res.set_header("Content-Type", contentType);
+        // 更新後重新整理就能拿到新版 (模組彼此 import，不帶版本號)
+        res.set_header("Cache-Control", "no-cache");
         res.body = ss.str();
         return res;
     }

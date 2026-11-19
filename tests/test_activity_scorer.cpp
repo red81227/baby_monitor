@@ -42,5 +42,25 @@ int main() {
     // 空影像
     CHECK(scorer.score(cv::Mat()) == 0.0);
 
+    // ROI：只計算區域內的變化
+    {
+        ActivityScorer roiScorer;
+        const cv::Rect2f rightHalf(0.5f, 0.0f, 0.5f, 1.0f);
+        CHECK(roiScorer.score(base, rightHalf) == 0.0);  // 第一張
+        // 左半邊改變：區域外，分數 0
+        cv::Mat leftChanged = base.clone();
+        cv::rectangle(leftChanged, cv::Rect(0, 0, 320, 360), cv::Scalar(255, 255, 255), cv::FILLED);
+        CHECK(roiScorer.score(leftChanged, rightHalf) == 0.0);
+        // 右半邊一半面積改變：約 50%
+        cv::Mat rightChanged = leftChanged.clone();
+        cv::rectangle(rightChanged, cv::Rect(320, 0, 160, 360), cv::Scalar(0, 0, 0), cv::FILLED);
+        const double r = roiScorer.score(rightChanged, rightHalf);
+        CHECK(r > 0.45 && r < 0.55);
+        // 區域改變時重新建立基準
+        CHECK(roiScorer.score(base, cv::Rect2f(0, 0, 0.5f, 1.0f)) == 0.0);
+        // 區域完全在畫面外
+        CHECK(roiScorer.score(base, cv::Rect2f(1.5f, 1.5f, 0.2f, 0.2f)) == 0.0);
+    }
+
     return 0;
 }

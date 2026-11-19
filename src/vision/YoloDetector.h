@@ -17,7 +17,9 @@ public:
     // bgr：要推論的影像 (通常是子碼流)。
     // reduceFactor / fullSize：bgr 是主碼流縮小 reduceFactor 倍的結果時，回傳的框換算成
     // 主碼流座標並限制在 fullSize 內；fullSize 為空時取 bgr 尺寸 x reduceFactor。
-    std::optional<Detection> detectPerson(const cv::Mat& bgr, int reduceFactor = 1, cv::Size fullSize = {});
+    // personCount 不為空時寫入達到信心門檻的人物數量。
+    std::optional<Detection> detectPerson(const cv::Mat& bgr, int reduceFactor = 1, cv::Size fullSize = {},
+                                          int* personCount = nullptr);
 
     // 實際使用的執行裝置："CUDA" 或 "CPU"
     const std::string& executionProvider() const { return provider_; }

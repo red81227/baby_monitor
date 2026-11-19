@@ -1,0 +1,9 @@
+2026-11-18 11:06:52.000  +     12.0s  seq=121      face_covered
+2026-11-18 11:07:05.000  +     25.0s  seq=251      awake_active
+2026-11-18 11:07:10.000  +     30.0s  seq=301      adult_present (shadow)
+2026-11-18 11:08:30.000  +     10.0s  seq=101      face_covered
+
+規則 version 5 (895b69cc9276)，550 張影格，共 4 次觸發
+  face_covered             2 次
+  awake_active             1 次
+  adult_present            1 次 (shadow)

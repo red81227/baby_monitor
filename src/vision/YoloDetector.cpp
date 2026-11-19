@@ -69,7 +69,9 @@ YoloDetector::YoloDetector(const std::string& modelPath, float personConf)
               << ", 類型: " << modelType_ << ")\n";
 }
 
-std::optional<Detection> YoloDetector::detectPerson(const cv::Mat& bgr, int reduceFactor, cv::Size fullSize) {
+std::optional<Detection> YoloDetector::detectPerson(const cv::Mat& bgr, int reduceFactor, cv::Size fullSize,
+                                                   int* personCount) {
+    if (personCount) *personCount = 0;
     if (bgr.empty()) return std::nullopt;
     if (reduceFactor < 1) reduceFactor = 1;
     if (fullSize.empty()) fullSize = cv::Size(bgr.cols * reduceFactor, bgr.rows * reduceFactor);
@@ -98,5 +100,5 @@ std::optional<Detection> YoloDetector::detectPerson(const cv::Mat& bgr, int redu
     // 主碼流座標 = letterbox 座標 / (scale / reduceFactor)
     return decodeBestDetection(outputs[0].GetTensorData<float>(), static_cast<int>(shape[1]),
                                scale / static_cast<float>(reduceFactor), 0.0f, 0.0f,
-                               fullSize.width, fullSize.height, personConf_, kPersonClass, stride_);
+                               fullSize.width, fullSize.height, personConf_, kPersonClass, stride_, personCount);
 }

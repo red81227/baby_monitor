@@ -1,0 +1,24 @@
+# bm_replay_rules 測試用規則
+version: 5
+situations:
+  - id: face_covered
+    severity: critical
+    route: direct
+    when:
+      - { signal: body_visible, is: true }
+      - { signal: face_visible, is: false, for: 10s }
+    cooldown: 60s
+  - id: awake_active
+    severity: warning
+    route: direct
+    when:
+      - { signal: activity, above: 0.03, for: 5s }
+    cooldown: 0s
+  - id: adult_present
+    severity: info
+    route: suppress
+    when:
+      - { signal: person_count, above: 1 }
+    suppress: { below: critical, linger: 2m }
+    cooldown: 0s
+    shadow: true

@@ -21,6 +21,7 @@ struct DetectionResult {
     uint64_t seq = 0;  // 來源影格
     std::chrono::steady_clock::time_point tCapture;
     std::optional<Detection> person;  // 座標以主碼流像素為單位
+    int personCount = 0;              // 達到信心門檻的人物數量 (person 為其中信心最高者)
     bool motion = false;
     int width = 0;  // 來源影格的主碼流寬高 (給前端判斷框的座標範圍)
     int height = 0;

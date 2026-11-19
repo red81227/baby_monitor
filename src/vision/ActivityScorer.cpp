@@ -5,14 +5,29 @@
 #include <algorithm>
 #include <cmath>
 
-double ActivityScorer::score(const cv::Mat& image) {
+double ActivityScorer::score(const cv::Mat& image, const std::optional<cv::Rect2f>& roi) {
     if (image.empty()) return 0.0;
 
+    cv::Mat src = image;
+    if (roi) {
+        const cv::Rect area(static_cast<int>(std::lround(roi->x * image.cols)),
+                            static_cast<int>(std::lround(roi->y * image.rows)),
+                            static_cast<int>(std::lround(roi->width * image.cols)),
+                            static_cast<int>(std::lround(roi->height * image.rows)));
+        const cv::Rect clipped = area & cv::Rect(0, 0, image.cols, image.rows);
+        if (clipped.width < 2 || clipped.height < 2) return 0.0;
+        src = image(clipped);
+    }
+    if (roi != prevRoi_) {
+        prev_.release();
+        prevRoi_ = roi;
+    }
+
     cv::Mat gray;
-    if (image.channels() == 3) {
-        cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
+    if (src.channels() == 3) {
+        cv::cvtColor(src, gray, cv::COLOR_BGR2GRAY);
     } else {
-        gray = image;
+        gray = src;
     }
 
     const int h = std::max(1, static_cast<int>(std::lround(static_cast<double>(kWidth) * gray.rows / gray.cols)));
